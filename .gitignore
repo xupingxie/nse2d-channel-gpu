@@ -1,0 +1,35 @@
+# build products
+nse2d_ssprk3
+nse2d_freeslip
+*.o
+*.ptx
+*.cubin
+
+# simulation output
+out/
+out_*/
+results/
+*.h5
+snaps/
+diagnostics.csv
+profiles_timeavg.csv
+timing.csv
+spectra_kx.csv
+progress.log
+
+# python
+__pycache__/
+*.pyc
+postproc/_selftest/
+
+# LaTeX
+*.aux
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.fls
+*.fdb_latexmk
+
+# macOS
+.DS_Store
