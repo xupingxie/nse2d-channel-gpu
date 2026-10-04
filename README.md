@@ -20,41 +20,56 @@ post-processing package.
 - Run-time diagnostics on the GPU: energy and enstrophy budgets including the wall enstrophy flux,
   wall friction (`u_τ`, `Re_τ`, `C_f`), mean and Reynolds-stress profiles; HDF5 snapshots with restart
 
+## Source layout
+
+```
+src/common.cuh   Grid and Params structs, error macros, launch helpers, shared includes
+src/grid.cu/.cuh wall-normal metrics: uniform, tanh stretching, tabulated mapping
+src/ops.cu/.cuh  operators: velocities from psi, mapped Laplacian, Arakawa Jacobian, Thom wall closure,
+                 RHS assembly (forcing, drag), manufactured-solution forcing, SSPRK stage updates
+src/poisson.cu/.cuh  cuFFT (x) + batched Thomas (y) Poisson solver with precomputed coefficients
+src/diag.cu/.cuh     reductions for budgets, wall quantities, row moments, time-step maxima
+src/io.cu/.cuh       run log, output scheduling, HDF5 snapshots and restart, CSV writers
+src/init.cu/.cuh     command-line parsing and initial conditions
+src/main.cu          time loop: three SSPRK(3,3) stages, each followed by a Poisson solve and wall closure
+src/test_api.cu      C-linkage wrappers around the operator launchers for unit tests (-DEXPORT_TEST_API)
+Makefile             build rules (walls, HDF5, architecture are make variables)
+build_solver.sh      NERSC Perlmutter helper: loads modules, finds libraries, calls make
+postproc/            verification and analysis scripts, test plan
+```
+
 ## Build
 
-Requires CUDA (cuFFT) and optionally HDF5. The script targets NERSC Perlmutter (A100, `sm_80`); set
-`CUDA_ARCH` for other devices.
+Requires CUDA 12 (cuFFT) and optionally HDF5.
 
 ```bash
-bash build_solver.sh hdf5                        # no-slip walls (default)  -> ./nse2d_ssprk3
-OUT=nse2d_freeslip bash build_solver.sh hdf5 freeslip   # free-slip walls (ω_wall = 0)
-bash build_solver.sh bin                         # without HDF5
+make                       # no-slip walls, HDF5 on      -> bin/nse2d
+make WALLS=freeslip        # free-slip walls (ω_wall=0)  -> bin/nse2d_freeslip
+make HDF5=0                # without HDF5 (no snapshots, restart, tabulated grids)
+make ARCH=sm_90            # other GPU (default sm_80, NVIDIA A100)
+make CUDA_HOME=/usr/local/cuda HDF5_ROOT=/usr     # library locations if not on the default paths
 ```
 
-Generic build command, if the script does not fit your system:
-
-```bash
-nvcc --extended-lambda -O3 -arch=sm_80 -use_fast_math -lineinfo nse2d_ssprk3.cu \
-     -lcufft -lcusparse -lhdf5 -DUSE_HDF5 -o nse2d_ssprk3
-```
+On NERSC Perlmutter, `bash build_solver.sh [hdf5|bin] [noslip|freeslip]` loads the modules and passes the
+library paths to `make`.
 
 ## Run
 
 ```bash
 # forced turbulent channel, Re_b = 2e4, stretched grid
-./nse2d_ssprk3 --Nx 4096 --Ny 2049 --Ub 1 --Reb 20000 --init mix --amp 0.05 \
+bin/nse2d --Nx 4096 --Ny 2049 --Ub 1 --Reb 20000 --init mix --amp 0.05 \
     --F0 0.05 --nforce 12 --drag 1e-3 --stretch tanh --beta 2 \
     --tend 400 --diag_save 0.1 --snap_save 5 --snap_fields all --outdir out/prod
 
 # laminar Poiseuille check
-./nse2d_ssprk3 --Nx 256 --Ny 257 --Reb 500 --init laminar --stretch tanh --beta 2 --tend 50 --outdir out/poiseuille
+bin/nse2d --Nx 256 --Ny 257 --Reb 500 --init laminar --stretch tanh --beta 2 --tend 50 --outdir out/poiseuille
 
 # manufactured solution, convergence test
-./nse2d_ssprk3 --Nx 256 --Ny 257 --Ub 0 --nu 1e-2 --init mms --mmsA0 1 --mmsEps 0.1 --mmsOm 1 --mmsKx 2 \
+bin/nse2d --Nx 256 --Ny 257 --Ub 0 --nu 1e-2 --init mms --mmsA0 1 --mmsEps 0.1 --mmsOm 1 --mmsKx 2 \
     --stretch tanh --beta 2 --no-adapt --dt 5e-3 --tend 1 --snap_save 1 --outdir out/mms
 ```
 
-Main options (see `parse_args` in the source for the full list):
+Main options (see `parse_args` in `src/init.cu` for the full list):
 
 | option | meaning |
 |---|---|
