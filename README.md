@@ -1,8 +1,7 @@
 # nse2d-channel-gpu
 
 GPU-accelerated direct numerical simulation of two-dimensional incompressible turbulence in a
-plane channel, in vorticity–streamfunction form. Single-source CUDA C++ solver with a Python
-post-processing package.
+plane channel, in vorticity–streamfunction form. CUDA C++ solver.
 
 **Physics and numerics**
 
@@ -35,7 +34,6 @@ src/main.cu          time loop: three SSPRK(3,3) stages, each followed by a Pois
 src/test_api.cu      C-linkage wrappers around the operator launchers for unit tests (-DEXPORT_TEST_API)
 Makefile             build rules (walls, HDF5, architecture are make variables)
 build_solver.sh      NERSC Perlmutter helper: loads modules, finds libraries, calls make
-postproc/            verification and analysis scripts, test plan
 ```
 
 ## Build
@@ -86,14 +84,6 @@ Main options (see `parse_args` in `src/init.cu` for the full list):
 
 Output files in `--outdir`: `diagnostics.csv`, `profiles_timeavg.csv`, `timing.csv` (with `--profile`),
 `progress.log`, and `snaps/snap_t*.h5`.
-
-## Post-processing and verification
-
-`postproc/` contains the verification and analysis scripts (eigenmode and manufactured-solution
-convergence, Poiseuille check, Arakawa conservation, budget closure, resolution sensitivity, production
-statistics, streamwise spectra and cascade fluxes, performance tables) together with the test plan
-`postproc/TESTS_TO_RUN.md`. See `postproc/README.md`. Requires `numpy pandas matplotlib h5py`;
-`python postproc/selftest.py` checks the installation on synthetic data.
 
 ## Citing
 
