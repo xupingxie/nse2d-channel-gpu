@@ -109,6 +109,8 @@ struct Params {
     Real mms_eps{0.1};        // modulation amplitude ε (0 => steady in time)
     Real mms_Om{1.0};         // modulation frequency Ω
     int  mms_kx{1};           // streamwise mode index (k = 2π*mms_kx/Lx)
+    // --- Optional scheme-consistent enstrophy-budget diagnostics (--closure_diag) ---
+    bool closure_diag{false}; // append 13 columns to diagnostics.csv; off by default (no cost, same output as before)
 };
 
 #define CUDA_CHECK(e) do { cudaError_t err__=(e); if (err__!=cudaSuccess){ \

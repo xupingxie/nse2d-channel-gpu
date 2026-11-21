@@ -20,6 +20,11 @@ __global__ void enstrophy_diss_mapped_full_kernel(const Real* __restrict__ omg,
 void launch_enstrophy_diss_mapped_full(const Real* omg, int Nx, int Ny, Real inv_dx, Real inv_deta,
                                               const Real* d_a_node, const Real* d_w_node,
                                               Real* d_sum_w2_full, Real* d_sum_gw2_full, cudaStream_t s=0);
+__global__ void enstrophy_sbp_mapped_kernel(const Real* __restrict__ omg, int Nx, int Ny,
+    Real inv_dx, Real inv_deta, const Real* __restrict__ a_edge, const Real* __restrict__ wt_node,
+    Real* __restrict__ sum_eta_h, Real* __restrict__ sum_phi_h);
+void launch_enstrophy_sbp_mapped(const Real* omg, int Nx, int Ny, Real inv_dx, Real inv_deta,
+    const Real* d_a_edge, const Real* d_wt_node, Real* d_sum_eta_h, Real* d_sum_phi_h, cudaStream_t s=0);
 __global__ void kinetic_energy_mapped_kernel(const Real* __restrict__ psi,
     int Nx, int Ny, Real inv_dx, Real inv_deta, const Real* __restrict__ a_node,
     const Real* __restrict__ w_node, Real* __restrict__ out_sum);

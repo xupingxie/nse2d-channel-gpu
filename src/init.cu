@@ -71,6 +71,7 @@ void parse_args(int argc, char** argv, Grid& G, Params& P,
         else if (eq(argv[i],"--statsEvery")&&i+1<argc) statsEvery=std::atoi(argv[++i]);
         else if (eq(argv[i],"--timeEvery")&&i+1<argc) timeEvery=std::atoi(argv[++i]);
         else if (eq(argv[i],"--profile")) profile=true;
+        else if (eq(argv[i],"--closure_diag")) P.closure_diag=true;   // scheme-consistent enstrophy-budget columns
         
         else if (eq(argv[i],"--resume")) P.resume = true;     // NEW: resume switches requires --load_path
         // NEW: write rolling time-averaged profiles every N steps

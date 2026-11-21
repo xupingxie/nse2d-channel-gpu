@@ -155,6 +155,49 @@ __global__ void enstrophy_diss_balance_mapped_kernel(
     }
 }
 
+// Summation-by-parts remainders of the mapped Laplacian in the quadrature wt_j = deta/a_j
+// (interior rows; wt = 0 on the wall rows), in which the discrete Laplacian is self-adjoint:
+//   nu <omega Lap_h omega>_wt = -eta_h + Phi_h   exactly, with
+//   eta_h = nu/A [ sum_{j=1}^{Ny-2} wt_j sum_i (omega_{i+1,j}-omega_{i,j})^2/dx^2
+//                + (1/deta) sum_{j=0}^{Ny-2} a_{j+1/2} sum_i (omega_{i,j+1}-omega_{i,j})^2 ]
+//   Phi_h = nu/(A deta) sum_i [ omega_{i,Ny-1} a_{Ny-3/2} (omega_{i,Ny-1}-omega_{i,Ny-2})
+//                             - omega_{i,0}    a_{1/2}    (omega_{i,1}-omega_{i,0}) ].
+// The host multiplies both sums by nu/A. Used by the --closure_diag columns eta_h and Phi_h.
+__global__ void enstrophy_sbp_mapped_kernel(const Real* __restrict__ omg, int Nx, int Ny,
+    Real inv_dx, Real inv_deta, const Real* __restrict__ a_edge, const Real* __restrict__ wt_node,
+    Real* __restrict__ sum_eta_h, Real* __restrict__ sum_phi_h)
+{
+    __shared__ Real se[256]; __shared__ Real sp[256];
+    const size_t tid = threadIdx.x; Real le = 0.0, lp = 0.0; const size_t N = (size_t)Nx*Ny;
+    for (size_t idx = blockIdx.x*blockDim.x + tid; idx < N; idx += gridDim.x*blockDim.x){
+        const int ix = (int)(idx % Nx), iy = (int)(idx / Nx);
+        const int xp = (ix==Nx-1 ? 0 : ix+1);
+        const Real w0 = omg[idx];
+        if (iy >= 1 && iy <= Ny-2){                       // forward x-difference, interior rows
+            const Real dxw = (omg[(size_t)iy*Nx + xp] - w0) * inv_dx;
+            le += wt_node[iy] * dxw * dxw;
+        }
+        if (iy <= Ny-2){                                   // face j+1/2 (includes both wall faces)
+            const Real dw = omg[(size_t)(iy+1)*Nx + ix] - w0;
+            le += a_edge[iy] * dw * dw * inv_deta;
+        }
+        if (iy == 0)    lp -= w0 * a_edge[0]    * (omg[(size_t)1*Nx + ix] - w0) * inv_deta;
+        if (iy == Ny-1) lp += w0 * a_edge[Ny-2] * (w0 - omg[(size_t)(Ny-2)*Nx + ix]) * inv_deta;
+    }
+    se[tid] = le; sp[tid] = lp; __syncthreads();
+    for (unsigned s = blockDim.x/2; s > 0; s >>= 1){ if (tid < s){ se[tid] += se[tid+s]; sp[tid] += sp[tid+s]; } __syncthreads(); }
+    if (tid == 0){ atomicAdd(sum_eta_h, se[0]); atomicAdd(sum_phi_h, sp[0]); }
+}
+void launch_enstrophy_sbp_mapped(const Real* omg, int Nx, int Ny, Real inv_dx, Real inv_deta,
+    const Real* d_a_edge, const Real* d_wt_node, Real* d_sum_eta_h, Real* d_sum_phi_h, cudaStream_t s)
+{
+    int threads = 256; int blocks = (int)std::min<size_t>(8192, ((size_t)Nx*Ny + threads - 1)/threads);
+    CUDA_CHECK(cudaMemsetAsync(d_sum_eta_h, 0, sizeof(Real), s));
+    CUDA_CHECK(cudaMemsetAsync(d_sum_phi_h, 0, sizeof(Real), s));
+    enstrophy_sbp_mapped_kernel<<<blocks,threads,0,s>>>(omg, Nx, Ny, inv_dx, inv_deta, d_a_edge, d_wt_node, d_sum_eta_h, d_sum_phi_h);
+    CUDA_CHECK(cudaGetLastError());
+}
+
 __global__ void kinetic_energy_mapped_kernel(const Real* __restrict__ psi,
     int Nx, int Ny, Real inv_dx, Real inv_deta, const Real* __restrict__ a_node,
     const Real* __restrict__ w_node, Real* __restrict__ out_sum)

@@ -159,7 +159,9 @@ int main(int argc, char** argv){
     // write headers (append-safe on resume)
     if (!file_nonempty(diag_path)){
         std::ofstream f(diag_path, std::ios::out);
-        f << "step,t,dt,umax,vmax,K,Omega,dOmega_rhs,eta,BOmega_wall,Pin,epsilon,POmega,tauw_bot,tauw_top,dpdx,utau_avg,Cf,Re_tau\n";
+        f << "step,t,dt,umax,vmax,K,Omega,dOmega_rhs,eta,BOmega_wall,Pin,epsilon,POmega,tauw_bot,tauw_top,dpdx,utau_avg,Cf,Re_tau";
+        if (P.closure_diag) f << ",dOmega_rhs_same,dOmega_rhs_same_int,Omega_int,eta_int,Jwall_s1_cum,Jwall_s2_cum,Jwall_s3_cum,Omega_int_w,dOmega_same_int_w,A_w,P_int_w,eta_h,Phi_h";   // --closure_diag: 13 extra columns
+        f << "\n";
     }
     if (profile && !file_nonempty(time_path)){
         std::ofstream g(time_path, std::ios::out);
@@ -239,6 +241,21 @@ int main(int argc, char** argv){
     //for new d_sum_omega_rhs
     Real *d_sum_omega_rhs;
     CUDA_CHECK(cudaMalloc(&d_sum_omega_rhs, sizeof(Real)));
+    // --closure_diag: accumulators for the interior-rows enstrophy and palinstrophy (j=1..Ny-2)
+    Real *d_sum_w2_int, *d_sum_gw2_int;
+    CUDA_CHECK(cudaMalloc(&d_sum_w2_int, sizeof(Real)));
+    CUDA_CHECK(cudaMalloc(&d_sum_gw2_int, sizeof(Real)));
+    // --closure_diag: operator quadrature wt_j = deta/a_j on the interior rows (0 on the wall rows), in
+    // which the mapped Laplacian is self-adjoint, and the accumulators of the scheme-consistent terms.
+    Real *d_wt_node = nullptr, *d_t2_D, *d_t2_J, *d_t2_w2, *d_t2_g2, *d_t2_P, *d_t2_eta, *d_t2_phi;
+    {
+        std::vector<Real> h_wt(G.Ny, (Real)0);
+        const Real deta_t2 = (Real)2.0 / (Real)(G.Ny - 1);
+        for (int j = 1; j < G.Ny-1; ++j) h_wt[j] = deta_t2 / G.a_node[j];
+        CUDA_CHECK(cudaMalloc(&d_wt_node, G.Ny*sizeof(Real)));
+        CUDA_CHECK(cudaMemcpy(d_wt_node, h_wt.data(), G.Ny*sizeof(Real), cudaMemcpyHostToDevice));
+        for (Real** p : {&d_t2_D, &d_t2_J, &d_t2_w2, &d_t2_g2, &d_t2_P, &d_t2_eta, &d_t2_phi}) CUDA_CHECK(cudaMalloc(p, sizeof(Real)));
+    }
 
     // velocity buffers
     Real *d_u=nullptr, *d_v=nullptr;
@@ -251,6 +268,33 @@ int main(int argc, char** argv){
     if (do_spec) spec1d.init(G);
     // time-weighted utau accumulation (from diag cadence)
     double tauw_abs_dt_sum = 0.0, T_diag = 0.0, last_diag_t = t_start; // NEW
+    // --closure_diag: wall-row bookkeeping, computed on the host from the two wall rows (j=0 and j=Ny-1).
+    // The Thom update only changes these two rows, so the enstrophy it adds to a stage state is exactly
+    //   0.5*invA_full*sum_i [ w_node[0]*(w_b_after^2 - w_b_before^2) + w_node[Ny-1]*(w_t_after^2 - w_t_before^2) ],
+    // i.e. the same trapezoid weights as the full-domain Omega. Jwall_s{1,2,3}_cum are the running sums
+    // of this jump for the stage-1, stage-2 and final-stage updates since t_start. Host-side sums of two
+    // rows avoid taking a small difference of two large device reductions.
+    std::vector<Real> h_row_b(G.Nx), h_row_t(G.Nx), h_rrow_b(G.Nx), h_rrow_t(G.Nx);
+    const double wq_b = (double)G.w_node[0], wq_t = (double)G.w_node[G.Ny-1];
+    auto fetch_wall_rows = [&](const Real* f, std::vector<Real>& rb, std::vector<Real>& rt){
+        CUDA_CHECK(cudaStreamSynchronize(stream));
+        CUDA_CHECK(cudaMemcpy(rb.data(), f, (size_t)G.Nx*sizeof(Real), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(rt.data(), f + (size_t)(G.Ny-1)*G.Nx, (size_t)G.Nx*sizeof(Real), cudaMemcpyDeviceToHost));
+    };
+    auto wall_row_enstrophy = [&](const Real* w_field) -> double {   // wall-row part of Omega = 0.5<w^2>_A
+        fetch_wall_rows(w_field, h_row_b, h_row_t);
+        double s = 0.0;
+        for (int i=0; i<G.Nx; ++i) s += wq_b*(double)h_row_b[i]*(double)h_row_b[i] + wq_t*(double)h_row_t[i]*(double)h_row_t[i];
+        return 0.5 * s * (double)invA_full;
+    };
+    auto wall_row_omega_rhs = [&](const Real* w_field, const Real* rhs_field) -> double { // wall-row part of <w rhs>_A
+        fetch_wall_rows(w_field, h_row_b, h_row_t);
+        fetch_wall_rows(rhs_field, h_rrow_b, h_rrow_t);
+        double s = 0.0;
+        for (int i=0; i<G.Nx; ++i) s += wq_b*(double)h_row_b[i]*(double)h_rrow_b[i] + wq_t*(double)h_row_t[i]*(double)h_rrow_t[i];
+        return s * (double)invA_full;
+    };
+    double Jwall_s1_cum = 0.0, Jwall_s2_cum = 0.0, Jwall_s3_cum = 0.0;
     Real *d_umax,*d_vmax, *d_vmaxm; 
     CUDA_CHECK(cudaMalloc(&d_umax,sizeof(Real))); 
     CUDA_CHECK(cudaMalloc(&d_vmax,sizeof(Real)));
@@ -369,7 +413,9 @@ int main(int argc, char** argv){
         std::ofstream f(diag_path,std::ios::app);
         f.setf(std::ios::scientific); f.precision(8);
         f<<0<<","<<0.0<<","<<P.dt_init<<","<<umax0<<","<<vmax0<<","<<sumK0_area<<","<<Omega0<<","<<dOmega0<<","<<eta0<<","<<BOmega0_wall<<","<<Pin0<<","<<epsilon0<<","<<P_Omega0<<","
-		<<tauwb<<","<<tauwt<<","<<dpdx0<<","<<utau0<<","<<Cf0<<","<<Re_tau0<<"\n";
+		<<tauwb<<","<<tauwt<<","<<dpdx0<<","<<utau0<<","<<Cf0<<","<<Re_tau0;
+        if (P.closure_diag) f<<","<<dOmega0<<",nan,nan,nan,"<<0.0<<","<<0.0<<","<<0.0<<",nan,nan,nan,nan,nan,nan"; // t=0 row: interior and scheme-consistent columns are not computed here
+        f<<"\n";
         log_event(prog_diag, prog_path, 0.0, (double)P.dt_init);
         next_diag_t = diag_save_dt;
     }
@@ -446,7 +492,13 @@ int main(int argc, char** argv){
 
 	launch_axpy(d_w1,d_w,d_rhs,S.dt,N,stream);
 	poisson.solve(d_w1,d_psi,dy,psi_bot,psi_top,stream);
-	launch_thom_wall_vorticity_mapped(d_w1,d_psi,G.Nx,G.Ny,d_dy_edge,psi_bot,psi_top,stream);
+	if (P.closure_diag){   // enstrophy added to this state by the wall-vorticity update (host sums of the two wall rows)
+	    const double Jb = wall_row_enstrophy(d_w1);
+	    launch_thom_wall_vorticity_mapped(d_w1,d_psi,G.Nx,G.Ny,d_dy_edge,psi_bot,psi_top,stream);
+	    Jwall_s1_cum += wall_row_enstrophy(d_w1) - Jb;
+	} else {
+	    launch_thom_wall_vorticity_mapped(d_w1,d_psi,G.Nx,G.Ny,d_dy_edge,psi_bot,psi_top,stream);
+	}
 
 	// Stage 2
 	launch_arakawa_J_mapped(d_psi,d_w1,d_J,G.Nx,G.Ny,inv_dx,inv_deta,d_a_node,stream);
@@ -459,7 +511,13 @@ int main(int argc, char** argv){
 
 	launch_ssprk2(d_w2,d_w,d_w1,d_rhs,S.dt,N,stream);
 	poisson.solve(d_w2,d_psi,dy,psi_bot,psi_top,stream);
-	launch_thom_wall_vorticity_mapped(d_w2,d_psi,G.Nx,G.Ny,d_dy_edge,psi_bot,psi_top,stream);
+	if (P.closure_diag){   // enstrophy added to this state by the wall-vorticity update (host sums of the two wall rows)
+	    const double Jb = wall_row_enstrophy(d_w2);
+	    launch_thom_wall_vorticity_mapped(d_w2,d_psi,G.Nx,G.Ny,d_dy_edge,psi_bot,psi_top,stream);
+	    Jwall_s2_cum += wall_row_enstrophy(d_w2) - Jb;
+	} else {
+	    launch_thom_wall_vorticity_mapped(d_w2,d_psi,G.Nx,G.Ny,d_dy_edge,psi_bot,psi_top,stream);
+	}
 
 	// Stage 3
 	launch_arakawa_J_mapped(d_psi,d_w2,d_J,G.Nx,G.Ny,inv_dx,inv_deta,d_a_node,stream);
@@ -471,7 +529,13 @@ int main(int argc, char** argv){
 
 	launch_ssprk3(d_w,d_w,d_w2,d_rhs,S.dt,N,stream);
 	poisson.solve(d_w,d_psi,dy,psi_bot,psi_top,stream);
-	launch_thom_wall_vorticity_mapped(d_w,d_psi,G.Nx,G.Ny,d_dy_edge,psi_bot,psi_top,stream);
+	if (P.closure_diag){   // enstrophy added to this state by the wall-vorticity update (host sums of the two wall rows)
+	    const double Jb = wall_row_enstrophy(d_w);
+	    launch_thom_wall_vorticity_mapped(d_w,d_psi,G.Nx,G.Ny,d_dy_edge,psi_bot,psi_top,stream);
+	    Jwall_s3_cum += wall_row_enstrophy(d_w) - Jb;
+	} else {
+	    launch_thom_wall_vorticity_mapped(d_w,d_psi,G.Nx,G.Ny,d_dy_edge,psi_bot,psi_top,stream);
+	}
 
         if (profile){ cudaEventRecord(e_step1, stream); cudaEventSynchronize(e_step1); }
         S.t += S.dt; step++;
@@ -517,7 +581,35 @@ int main(int argc, char** argv){
 	    launch_mean_wall_omega_omegay_mapped(d_w,G.Nx,G.Ny,inv_deta,d_a_node,d_mean_wwy_bot,d_mean_wwy_top,stream); // wall enstrophy flux integrand ⟨ω ω_y⟩_x at y=±h 
 	    //launch_enstrophy_diss_balance_mapped(d_w,G.Nx,G.Ny,inv_dx2,inv_deta2,d_a_node,d_a_edge,d_w_node,d_sum_w2,d_sum_gw2,stream); 
             //compute <w*rhs> for Enstrophy budget check purpose
+            // column dOmega_rhs (unchanged definition):
+            //     omega^{n+1} paired with the stage-3 right-hand side N(omega^{(2)}) still held in d_rhs.
             launch_omega_rhs_balance_mapped(d_w,d_rhs,G.Nx, G.Ny, d_w_node,d_sum_omega_rhs,stream);
+            Real sum_omega_rhs_mixed = 0;
+            CUDA_CHECK(cudaStreamSynchronize(stream));
+            CUDA_CHECK(cudaMemcpy(&sum_omega_rhs_mixed,d_sum_omega_rhs,sizeof(Real),cudaMemcpyDeviceToHost));
+            double wall_omega_rhs_same = 0.0;
+            if (P.closure_diag){
+                // (b) same-state definition: rebuild J, Laplacian and right-hand side at the state
+                //     being written (omega^{n+1} after the wall update, with its own psi), then <omega N(omega)>_A.
+                //     d_J, d_lap, d_rhs are scratch and are recomputed at stage 1 of the next step.
+                launch_arakawa_J_mapped(d_psi,d_w,d_J,G.Nx,G.Ny,inv_dx,inv_deta,d_a_node,stream);
+                launch_laplacian_fd_mapped(d_w,d_lap,G.Nx,G.Ny,inv_dx2,inv_deta2,d_a_node,d_a_edge,stream);
+                launch_rhs_mapped(d_J,d_lap,d_w,d_rhs,G.Nx,G.Ny,nu,P.F0,P.nforce,G.h,P.lin_drag,d_y_node,stream);
+                if (P.mms) launch_mms_add_forcing(d_rhs, G.Nx, G.Ny, G.Lx, G.h, S.t, nu, P.lin_drag,
+                                                  P.mms_A0, P.mms_eps, P.mms_Om, P.mms_kx, d_y_node, stream);
+                launch_omega_rhs_balance_mapped(d_w,d_rhs,G.Nx, G.Ny, d_w_node,d_sum_omega_rhs,stream); // full domain, same state
+                wall_omega_rhs_same = wall_row_omega_rhs(d_w, d_rhs);   // wall-row part of the line above
+                // (c) interior-rows enstrophy and palinstrophy (j=1..Ny-2), same weights, no wall rows
+                launch_enstrophy_diss_mapped(d_w,G.Nx,G.Ny,inv_dx,inv_deta,d_a_node,d_w_node,d_sum_w2_int,d_sum_gw2_int,stream);
+                // scheme-consistent interior budget at the same state (d_J, d_rhs rebuilt above):
+                //   D_w = <omega N(omega)>_wt,  A_w = -<omega J>_wt,  Omega_w = 1/2 <omega^2>_wt,  P_w = <omega f>_wt,
+                //   eta_h / Phi_h = summation-by-parts remainders of nu <omega Lap_h omega>_wt.
+                launch_omega_rhs_balance_mapped(d_w,d_rhs,G.Nx,G.Ny,d_wt_node,d_t2_D,stream);
+                launch_omega_rhs_balance_mapped(d_w,d_J,  G.Nx,G.Ny,d_wt_node,d_t2_J,stream);
+                launch_enstrophy_diss_mapped(d_w,G.Nx,G.Ny,inv_dx,inv_deta,d_a_node,d_wt_node,d_t2_w2,d_t2_g2,stream);
+                launch_enstrophy_input_mapped_full(d_w,G.Nx,G.Ny,G.h,P.F0,P.nforce,d_y_node,d_wt_node,d_t2_P,stream);
+                launch_enstrophy_sbp_mapped(d_w,G.Nx,G.Ny,inv_dx,inv_deta,d_a_edge,d_wt_node,d_t2_eta,d_t2_phi,stream);
+            }
             launch_power_input_mapped(d_psi,G.Nx,G.Ny,inv_deta,G.h,P.F0,P.nforce,d_a_node,d_y_node,d_w_node,d_pin,stream);
     	    launch_energy_dissipation_mapped(d_psi,d_w,G.Nx,G.Ny,inv_dx,inv_deta,d_a_node,d_a_edge,d_w_node,d_sum_eps,stream);
             launch_enstrophy_input_mapped_full(d_w,G.Nx,G.Ny,G.h,P.F0,P.nforce,d_y_node,d_w_node,d_p_omega,stream);
@@ -537,7 +629,35 @@ int main(int argc, char** argv){
 	    Real eta     = nu * sum_gradw2 * invA_full; // ν⟨|∇ω|²⟩_A full-domain
             Real BOmega_wall = (nu>0.0) ? (nu * (mean_wwy_top - mean_wwy_bot) / (2.0 * G.h)) : (Real)0; // boundary integral ν/(2h)[⟨ω ω_y⟩_top-⟨ω ω_y⟩_bot]
 
-            Real dOmega_rhs = sum_omega_rhs * invA_full; // new: dO/dt = <omega * rhs>_A,int
+            Real dOmega_rhs = sum_omega_rhs_mixed * invA_full;   // archived mixed-stage column, unchanged
+            // --closure_diag columns: same-state <omega N(omega)>_A (full domain and interior rows), interior-row
+            // enstrophy and palinstrophy, and the scheme-consistent terms (all normalised like Omega and eta).
+            const Real qnan = std::numeric_limits<Real>::quiet_NaN();
+            Real dOmega_rhs_same = qnan, dOmega_rhs_same_int = qnan, Omega_int = qnan, eta_int = qnan;
+            Real Omega_int_w = qnan, dOmega_same_int_w = qnan, A_w = qnan, P_int_w = qnan, eta_h = qnan, Phi_h = qnan;
+            if (P.closure_diag){
+                dOmega_rhs_same     = sum_omega_rhs * invA_full;
+                dOmega_rhs_same_int = dOmega_rhs_same - (Real)wall_omega_rhs_same;
+                Real sum_w2_int = 0, sum_gw2_int = 0;
+                CUDA_CHECK(cudaStreamSynchronize(stream));
+                CUDA_CHECK(cudaMemcpy(&sum_w2_int, d_sum_w2_int, sizeof(Real),cudaMemcpyDeviceToHost));
+                CUDA_CHECK(cudaMemcpy(&sum_gw2_int,d_sum_gw2_int,sizeof(Real),cudaMemcpyDeviceToHost));
+                Omega_int = 0.5 * sum_w2_int * invA_full;   // interior-rows part of Omega (same normalisation)
+                eta_int   = nu * sum_gw2_int * invA_full;   // interior-rows part of eta
+                Real t2_D = 0, t2_J = 0, t2_w2 = 0, t2_P = 0, t2_eta = 0, t2_phi = 0;
+                CUDA_CHECK(cudaMemcpy(&t2_D,  d_t2_D,  sizeof(Real), cudaMemcpyDeviceToHost));
+                CUDA_CHECK(cudaMemcpy(&t2_J,  d_t2_J,  sizeof(Real), cudaMemcpyDeviceToHost));
+                CUDA_CHECK(cudaMemcpy(&t2_w2, d_t2_w2, sizeof(Real), cudaMemcpyDeviceToHost));
+                CUDA_CHECK(cudaMemcpy(&t2_P,  d_t2_P,  sizeof(Real), cudaMemcpyDeviceToHost));
+                CUDA_CHECK(cudaMemcpy(&t2_eta,d_t2_eta,sizeof(Real), cudaMemcpyDeviceToHost));
+                CUDA_CHECK(cudaMemcpy(&t2_phi,d_t2_phi,sizeof(Real), cudaMemcpyDeviceToHost));
+                Omega_int_w       = 0.5 * t2_w2 * invA_full;
+                dOmega_same_int_w = t2_D * invA_full;
+                A_w               = -t2_J * invA_full;
+                P_int_w           = t2_P * invA_full;
+                eta_h             = nu * t2_eta * invA_full;
+                Phi_h             = nu * t2_phi * invA_full;
+            }
             Real Pin1  = Pin * invA_full; //Power input (full domain)
             Real epsilon = nu * sum_eps * invA_full; // Energy dissipation ε = ν⟨|∇u|²⟩_A
             Real P_Omega = p_omega_sum * invA_full; // Enstrophy input P_Ω = ⟨ω f_ω⟩_A,int
@@ -560,7 +680,12 @@ int main(int argc, char** argv){
             f.setf(std::ios::scientific); f.precision(8);
             f << step << "," << S.t << "," << S.dt <<"," << umax << "," << vmax << ","
               << sumK_area << "," << Omega << "," << dOmega_rhs<<","<< eta <<"," <<BOmega_wall<<","<< Pin1 << "," << epsilon<<","<<P_Omega<<","
-              << tauw_bot << "," << tauw_top << "," <<dpdx_mean<<","<< utau_inst << "," << Cf << "," << Re_tau << "\n";
+              << tauw_bot << "," << tauw_top << "," <<dpdx_mean<<","<< utau_inst << "," << Cf << "," << Re_tau;
+            if (P.closure_diag)
+                f << "," << dOmega_rhs_same << "," << dOmega_rhs_same_int << "," << Omega_int << "," << eta_int
+                  << "," << Jwall_s1_cum << "," << Jwall_s2_cum << "," << Jwall_s3_cum
+                  << "," << Omega_int_w << "," << dOmega_same_int_w << "," << A_w << "," << P_int_w << "," << eta_h << "," << Phi_h;
+            f << "\n";
 
             log_event(prog_diag, prog_path, (double)next_diag_t, (double)S.dt);
             next_diag_t += diag_save_dt;
@@ -676,6 +801,8 @@ int main(int argc, char** argv){
     CUDA_CHECK(cudaFree(d_mean_wwy_bot));
     CUDA_CHECK(cudaFree(d_mean_wwy_top));
     CUDA_CHECK(cudaFree(d_sum_omega_rhs));
+    CUDA_CHECK(cudaFree(d_sum_w2_int)); CUDA_CHECK(cudaFree(d_sum_gw2_int));
+    CUDA_CHECK(cudaFree(d_wt_node)); for (Real* p : {d_t2_D, d_t2_J, d_t2_w2, d_t2_g2, d_t2_P, d_t2_eta, d_t2_phi}) CUDA_CHECK(cudaFree(p));
     CUDA_CHECK(cudaFree(d_sum_uv)); CUDA_CHECK(cudaFree(d_sum_v2)); CUDA_CHECK(cudaFree(d_sum_u2));
     CUDA_CHECK(cudaFree(d_sum_v));  CUDA_CHECK(cudaFree(d_sum_u));
     CUDA_CHECK(cudaFree(d_lap)); CUDA_CHECK(cudaFree(d_J));

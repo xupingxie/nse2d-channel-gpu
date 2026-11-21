@@ -32,13 +32,15 @@ src/io.cu/.cuh       run log, output scheduling, HDF5 snapshots and restart, CSV
 src/init.cu/.cuh     command-line parsing and initial conditions
 src/main.cu          time loop: three SSPRK(3,3) stages, each followed by a Poisson solve and wall closure
 src/test_api.cu      C-linkage wrappers around the operator launchers for unit tests (-DEXPORT_TEST_API)
+tests/               test suite: run_tests.py, reference data, README.md
 Makefile             build rules (walls, HDF5, architecture are make variables)
 build_solver.sh      NERSC Perlmutter helper: loads modules, finds libraries, calls make
 ```
 
 ## Build
 
-Requires CUDA 12 (cuFFT) and optionally HDF5.
+Requires an NVIDIA GPU, the CUDA toolkit (version 12 or later) with cuFFT, GNU make,
+and optionally HDF5 (needed for snapshots, restart, tabulated grids, and the test suite).
 
 ```bash
 make                       # no-slip walls, HDF5 on      -> bin/nse2d
@@ -80,10 +82,23 @@ Main options (see `parse_args` in `src/init.cu` for the full list):
 | `--tend --diag_save --snap_save --snap_fields` | run length and output cadence |
 | `--statsEvery --profilesWriteEvery` | profile accumulation and output |
 | `--profile --timeEvery` | per-step timers (FFT, tridiagonal, total) |
+| `--closure_diag` | append the scheme-consistent enstrophy-budget columns to `diagnostics.csv` (see `tests/README.md`) |
 | `--resume --load_path snap.h5` | restart from a snapshot |
 
 Output files in `--outdir`: `diagnostics.csv`, `profiles_timeavg.csv`, `timing.csv` (with `--profile`),
 `progress.log`, and `snaps/snap_t*.h5`.
+
+## Tests
+
+```bash
+make && make WALLS=freeslip
+python3 tests/run_tests.py all        # needs numpy and h5py; a few minutes on one GPU
+```
+
+Six tests (spatial and temporal convergence on an exact eigenmode, laminar Poiseuille flow, a manufactured
+solution of the nonlinear equation, conservation of the discrete invariants, and a forced channel with the
+exact enstrophy identity) print `PASS` or `FAIL` and are compared with the reference data in
+`tests/reference/`. See `tests/README.md`.
 
 ## Citing
 

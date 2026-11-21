@@ -27,10 +27,12 @@ struct StepProgress {
 
 enum SnapFmt { SNAP_H5, SNAP_BIN, SNAP_BOTH };
 
+#ifndef NO_HDF5
 bool h5_has_dataset(hid_t file, const char* name);
 double h5_read_attr_double(hid_t file, const char* name, double defv);
 int h5_read_attr_int(hid_t file, const char* name, int defv);
 void h5_read_2d(hid_t file, const char* name, Real* out, int Nx, int Ny);
+#endif
 bool dir_exists(const std::string& p);
 bool make_one(const std::string& p);
 bool ensure_dir_p(const std::string& p);
@@ -44,9 +46,11 @@ bool file_nonempty(const std::string& path);
 double time_tol(double t);
 double sched_tol(double t, double dt);
 double next_after(double t0, double dt);
+#ifndef NO_HDF5
 void h5_write_attr_double(hid_t where, const char* name, double v);
 void h5_write_attr_int(hid_t where, const char* name, int v);
 void h5_write_2d(hid_t file, const char* dname, const Real* data, int Nx, int Ny);
+#endif
 void save_snapshot_any(const std::string& outdir, int Nx, int Ny, Real t,
                               const Real* d_psi, const Real* d_w,
                               const Real* d_u,   const Real* d_v,
