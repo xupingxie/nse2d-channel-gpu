@@ -1,0 +1,1 @@
+nse2d --Nx 64 --Ny 65 --Ub 0 --nu 0.01 --init mms --mmsA0 1.0 --mmsEps 0.1 --mmsOm 1.0 --mmsKx 2 --stretch tanh --beta 2 --no-adapt --dt 0.0005 --tend 1.0 --snap_save 1.0 --snap_fields omega_psi --diag_save 1.0 --outdir <case directory>

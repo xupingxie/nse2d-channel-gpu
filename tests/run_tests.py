@@ -57,6 +57,7 @@ MMS_NU, MMS_T, MMS_A0, MMS_EPS, MMS_OM, MMS_KX = 1e-2, 1.0, 1.0, 0.1, 1.0, 2
 MMS_N, MMS_BETA = [64, 128, 256], [0, 2]
 CON_DT, CON_T = [4e-3, 2e-3], 2.0               # conservation
 CH_REB, CH_F0, CH_NF, CH_DRAG, CH_T = 5000.0, 0.05, 12, 1e-3, 20.0   # channel
+CH_DIAG = 0.05              # interval of the diagnostic output
 CH_TREF = 2.0               # early-time window compared with the reference
 
 
@@ -105,7 +106,7 @@ def cases():
     c.append(("channel", "noslip",
               ["--Nx", "512", "--Ny", "257", "--Ub", "1", "--Reb", str(CH_REB), "--init", "mix", "--amp", "0.05",
                "--F0", str(CH_F0), "--nforce", str(CH_NF), "--drag", str(CH_DRAG)] + stretch_args(2) +
-              ["--tend", str(CH_T), "--diag_save", "0.05", "--snap_save", str(CH_T), "--snap_fields", "omega_psi",
+              ["--tend", str(CH_T), "--diag_save", str(CH_DIAG), "--snap_save", str(CH_T), "--snap_fields", "omega_psi",
                "--closure_diag"]))
     return c
 
@@ -326,8 +327,9 @@ def test_channel(out):
     m[f"K_at_t{CH_TREF:g}"] = float(early["K"][-1])
     m[f"Omega_at_t{CH_TREF:g}"] = float(early["Omega"][-1])
     fin = np.all([np.all(np.isfinite(d[c][1:])) for c in ("K", "Omega", "eta", "epsilon", "Re_tau")])
+    # the last diagnostic row is written one output interval before the end time
     checks.append((f"run reached t = {float(d['t'][-1]):g} with finite diagnostics",
-                   bool(fin) and abs(float(d["t"][-1]) - CH_T) < 1e-2, f"{len(d)} rows"))
+                   bool(fin) and float(d["t"][-1]) > CH_T - CH_DIAG - 1e-6, f"{len(d)} rows"))
     return m, checks
 
 

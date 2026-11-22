@@ -1,0 +1,1 @@
+nse2d_freeslip --Nx 256 --Ny 257 --Ub 0 --nu 0 --init rand --amp 0.5 --seed 7 --stretch none --no-adapt --dt 0.004 --tend 2.0 --diag_save 0.2 --snap_save 0.4 --snap_fields omega_psi --outdir <case directory>

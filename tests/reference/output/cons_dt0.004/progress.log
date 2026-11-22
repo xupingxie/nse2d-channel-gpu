@@ -1,0 +1,29 @@
+[grid-y] stretch=none beta=0.000 (mapped)
+Z2Z channel DNS | Nx=256 Ny=257 Lx=12.566371 h=1.000000
+Reb=10000, Ub=0, nu=0 (from 2h*Ub/Reb)
+[mode] New simulation (fresh IC), t0=0.000000
+[params] Nx=256 Ny=257 Lx=12.566371 h=1.000000 Ub=0.000000 Reb=10000.0 nu=0.000000e+00 dt_init=0.004 cfl=0.5 adapt=no t_end=2
+[io] snapshots every Δt=0.4
+[io] diagnostics every Δt=0.2
+Init mode: rand (amp=0.5, alpha=1.2, my=1, phase=0, seed=7)
+[integrator] SSPRK3 (fully explicit)
+diag 1/11 complete, t=0.000000, dt=4.000000e-03, wall_since_last=0.060s, elapsed=0.060s, est_total=00:00:01, ETA=00:00:01
+[schedule] next snapshot    at t=0.400000 (Δt=0.4)
+[schedule] next diagnostics at t=0.200000 (Δt=0.2)
+[run] t0=0.000000 -> t_end=2.000000 (ΔT_remain=2.000000)
+diag 2/11 complete, t=0.200000, dt=4.000000e-03, wall_since_last=0.033s, elapsed=0.092s, est_total=00:00:01, ETA=00:00:00
+snap 1/6 complete, t=0.400000, dt=4.000000e-03, wall_since_last=0.127s, elapsed=0.127s, est_total=00:00:01, ETA=00:00:01
+diag 3/11 complete, t=0.400000, dt=4.000000e-03, wall_since_last=0.035s, elapsed=0.127s, est_total=00:00:00, ETA=00:00:00
+diag 4/11 complete, t=0.600000, dt=4.000000e-03, wall_since_last=0.032s, elapsed=0.159s, est_total=00:00:00, ETA=00:00:00
+snap 2/6 complete, t=0.800000, dt=4.000000e-03, wall_since_last=0.066s, elapsed=0.193s, est_total=00:00:01, ETA=00:00:00
+diag 5/11 complete, t=0.800000, dt=4.000000e-03, wall_since_last=0.035s, elapsed=0.194s, est_total=00:00:00, ETA=00:00:00
+diag 6/11 complete, t=1.000000, dt=4.000000e-03, wall_since_last=0.032s, elapsed=0.225s, est_total=00:00:00, ETA=00:00:00
+snap 3/6 complete, t=1.200000, dt=4.000000e-03, wall_since_last=0.066s, elapsed=0.259s, est_total=00:00:01, ETA=00:00:00
+diag 7/11 complete, t=1.200000, dt=4.000000e-03, wall_since_last=0.035s, elapsed=0.260s, est_total=00:00:00, ETA=00:00:00
+diag 8/11 complete, t=1.400000, dt=4.000000e-03, wall_since_last=0.032s, elapsed=0.292s, est_total=00:00:00, ETA=00:00:00
+snap 4/6 complete, t=1.600000, dt=4.000000e-03, wall_since_last=0.066s, elapsed=0.326s, est_total=00:00:00, ETA=00:00:00
+diag 9/11 complete, t=1.600000, dt=4.000000e-03, wall_since_last=0.035s, elapsed=0.326s, est_total=00:00:00, ETA=00:00:00
+diag 10/11 complete, t=1.800000, dt=4.000000e-03, wall_since_last=0.032s, elapsed=0.358s, est_total=00:00:00, ETA=00:00:00
+snap 5/6 complete, t=2.000000, dt=4.000000e-03, wall_since_last=0.066s, elapsed=0.392s, est_total=00:00:00, ETA=00:00:00
+diag 11/11 complete, t=2.000000, dt=4.000000e-03, wall_since_last=0.035s, elapsed=0.393s, est_total=00:00:00, ETA=00:00:00
+Done. 

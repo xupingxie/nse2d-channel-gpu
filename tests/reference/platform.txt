@@ -1,0 +1,11 @@
+date: 2026-11-21T14:35:37-08:00
+host: nid001033
+gpu: NVIDIA A100-SXM4-40GB, 40960 MiB, 580.196.07
+nvcc: Build cuda_13.2.r13.2/compiler.37668154_0
+nvcc path: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/bin/nvcc
+python 3.13.18 numpy 2.5.4 h5py 3.16.0
+modules:   1) craype-x86-milan                11) nvidia/26.5               (g,c)
+modules:   6) cpe/26.03                       16) PrgEnv-nvidia/8.7.0       (prgenv)
+modules:   7) craype-accel-nvidia80           17) cudatoolkit/13.2          (g)
+modules:   8) gpu/1.0                         18) cray-hdf5/1.14.3.9
+modules:  10) darshan/default                 20) python/3.13-26.11.0

@@ -1,0 +1,1 @@
+nse2d --Nx 64 --Ny 129 --Ub 1.0 --Reb 500.0 --init laminar --stretch tanh --beta 2 --tend 5.0 --diag_save 0.5 --snap_save 5.0 --snap_fields omega_psi --outdir <case directory>

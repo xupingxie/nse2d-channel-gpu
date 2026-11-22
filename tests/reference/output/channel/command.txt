@@ -1,0 +1,1 @@
+nse2d --Nx 512 --Ny 257 --Ub 1 --Reb 5000.0 --init mix --amp 0.05 --F0 0.05 --nforce 12 --drag 0.001 --stretch tanh --beta 2 --tend 20.0 --diag_save 0.05 --snap_save 20.0 --snap_fields omega_psi --closure_diag --outdir <case directory>

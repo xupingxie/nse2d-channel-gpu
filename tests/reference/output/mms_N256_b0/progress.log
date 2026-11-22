@@ -1,0 +1,16 @@
+[grid-y] stretch=none beta=0.000 (mapped)
+Z2Z channel DNS | Nx=256 Ny=257 Lx=12.566371 h=1.000000
+Reb=10000, Ub=0, nu=0.01 (override)
+[mode] New simulation (fresh IC), t0=0.000000
+[params] Nx=256 Ny=257 Lx=12.566371 h=1.000000 Ub=0.000000 Reb=10000.0 nu=1.000000e-02 dt_init=3.125e-05 cfl=0.5 adapt=no t_end=1
+[io] snapshots every Δt=1
+[io] diagnostics every Δt=1
+Init mode: mms manufactured solution
+[integrator] SSPRK3 (fully explicit)
+diag 1/2 complete, t=0.000000, dt=3.125000e-05, wall_since_last=0.043s, elapsed=0.043s, est_total=00:00:00, ETA=00:00:00
+[schedule] next snapshot    at t=1.000000 (Δt=1)
+[schedule] next diagnostics at t=1.000000 (Δt=1)
+[run] t0=0.000000 -> t_end=1.000000 (ΔT_remain=1.000000)
+snap 1/2 complete, t=1.000000, dt=3.125000e-05, wall_since_last=20.389s, elapsed=20.389s, est_total=00:00:41, ETA=00:00:20
+diag 2/2 complete, t=1.000000, dt=3.125000e-05, wall_since_last=20.347s, elapsed=20.390s, est_total=00:00:20, ETA=00:00:00
+Done. 

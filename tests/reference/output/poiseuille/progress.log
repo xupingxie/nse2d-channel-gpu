@@ -1,0 +1,26 @@
+[grid-y] stretch=tanh beta=2.000 (mapped)
+Z2Z channel DNS | Nx=64 Ny=129 Lx=12.566371 h=1.000000
+Reb=500, Ub=1, nu=0.004 (from 2h*Ub/Reb)
+[mode] New simulation (fresh IC), t0=0.000000
+[params] Nx=64 Ny=129 Lx=12.566371 h=1.000000 Ub=1.000000 Reb=500.0 nu=4.000000e-03 dt_init=0.001 cfl=0.5 adapt=yes t_end=5
+[io] snapshots every Δt=5
+[io] diagnostics every Δt=0.5
+Init mode: laminar (amp=0.5, alpha=1.2, my=1, phase=0, seed=123456789)
+[integrator] SSPRK3 (fully explicit)
+diag 1/11 complete, t=0.000000, dt=1.000000e-03, wall_since_last=0.043s, elapsed=0.043s, est_total=00:00:00, ETA=00:00:00
+[schedule] next snapshot    at t=5.000000 (Δt=5)
+[schedule] next diagnostics at t=0.500000 (Δt=0.5)
+[run] t0=0.000000 -> t_end=5.000000 (ΔT_remain=5.000000)
+[dt] step=0 t=0 umax=1.499e+00 vmax=0.000e+00 vmaxm=0.000e+00 dt_x=7e-02 dt_y=1.000e+30 dt_adv=6.548e-02 dt_vis=3.482e-04 dt=3.482e-04 
+diag 2/11 complete, t=0.500000, dt=3.482175e-04, wall_since_last=0.666s, elapsed=0.709s, est_total=00:00:04, ETA=00:00:03
+diag 3/11 complete, t=1.000000, dt=3.482175e-04, wall_since_last=0.665s, elapsed=1.374s, est_total=00:00:05, ETA=00:00:04
+diag 4/11 complete, t=1.500000, dt=3.482175e-04, wall_since_last=0.665s, elapsed=2.040s, est_total=00:00:06, ETA=00:00:04
+[dt] step=5000 t=1.74109 umax=1.499e+00 vmax=0.000e+00 vmaxm=0.000e+00 dt_x=7e-02 dt_y=1.000e+30 dt_adv=6.548e-02 dt_vis=3.482e-04 dt=3.482e-04 
+diag 5/11 complete, t=2.000000, dt=3.482175e-04, wall_since_last=0.666s, elapsed=2.705s, est_total=00:00:06, ETA=00:00:03
+diag 6/11 complete, t=2.500000, dt=1.463352e-04, wall_since_last=0.665s, elapsed=3.371s, est_total=00:00:06, ETA=00:00:03
+diag 7/11 complete, t=3.000000, dt=3.482175e-04, wall_since_last=0.665s, elapsed=4.035s, est_total=00:00:06, ETA=00:00:02
+[dt] step=10000 t=3.48197 umax=1.499e+00 vmax=0.000e+00 vmaxm=0.000e+00 dt_x=7e-02 dt_y=1.000e+30 dt_adv=6.548e-02 dt_vis=3.482e-04 dt=3.482e-04 
+diag 8/11 complete, t=3.500000, dt=3.482175e-04, wall_since_last=0.666s, elapsed=4.701s, est_total=00:00:06, ETA=00:00:02
+diag 9/11 complete, t=4.000000, dt=3.482175e-04, wall_since_last=0.665s, elapsed=5.366s, est_total=00:00:07, ETA=00:00:01
+diag 10/11 complete, t=4.500000, dt=3.482175e-04, wall_since_last=0.665s, elapsed=6.031s, est_total=00:00:07, ETA=00:00:01
+Done. 

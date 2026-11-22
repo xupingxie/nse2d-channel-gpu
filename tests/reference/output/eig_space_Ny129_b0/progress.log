@@ -1,0 +1,19 @@
+[grid-y] stretch=none beta=0.000 (mapped)
+Z2Z channel DNS | Nx=64 Ny=129 Lx=12.566371 h=1.000000
+Reb=10000, Ub=0, nu=0.01 (override)
+[mode] New simulation (fresh IC), t0=0.000000
+[params] Nx=64 Ny=129 Lx=12.566371 h=1.000000 Ub=0.000000 Reb=10000.0 nu=1.000000e-02 dt_init=0.0001 cfl=0.5 adapt=no t_end=2
+[io] snapshots every Δt=2
+[io] diagnostics every Δt=0.5
+Init mode: diffusion (no-slip eigenmode, kx=0), mu=3.14159 (n=2), Au=1, decay sigma=nu*mu^2=0.098696
+[integrator] SSPRK3 (fully explicit)
+diag 1/5 complete, t=0.000000, dt=1.000000e-04, wall_since_last=0.022s, elapsed=0.022s, est_total=00:00:00, ETA=00:00:00
+[schedule] next snapshot    at t=2.000000 (Δt=2)
+[schedule] next diagnostics at t=0.500000 (Δt=0.5)
+[run] t0=0.000000 -> t_end=2.000000 (ΔT_remain=2.000000)
+diag 2/5 complete, t=0.500000, dt=1.000000e-04, wall_since_last=2.134s, elapsed=2.156s, est_total=00:00:05, ETA=00:00:03
+diag 3/5 complete, t=1.000000, dt=1.000000e-04, wall_since_last=2.132s, elapsed=4.288s, est_total=00:00:07, ETA=00:00:03
+diag 4/5 complete, t=1.500000, dt=1.000000e-04, wall_since_last=2.133s, elapsed=6.421s, est_total=00:00:08, ETA=00:00:02
+snap 1/2 complete, t=2.000000, dt=1.000000e-04, wall_since_last=8.554s, elapsed=8.554s, est_total=00:00:17, ETA=00:00:09
+diag 5/5 complete, t=2.000000, dt=1.000000e-04, wall_since_last=2.134s, elapsed=8.555s, est_total=00:00:09, ETA=00:00:00
+Done. 

@@ -1,0 +1,1 @@
+nse2d --Nx 64 --Ny 129 --Ub 0 --nu 0.0001 --init diffusion --my 8 --amp 0.1 --stretch none --no-adapt --dt 0.08 --dtmax 1 --tend 10.24 --snap_save 10.24 --snap_fields omega --diag_save 10.24 --outdir <case directory>
